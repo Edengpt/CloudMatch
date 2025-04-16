@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>מפת מרכזי נתונים</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f5f5f5;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .header {
+      background-color: #2c3e50;
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+    .nav-tabs {
+      display: flex;
+      background-color: #34495e;
+      padding: 0;
+      margin: 0;
+    }
+    .nav-tab {
+      padding: 15px 20px;
+      color: white;
+      cursor: pointer;
+      list-style: none;
+    }
+    .nav-tab.active {
+      background-color: #2980b9;
+    }
+    .view {
+      display: none;
+      padding: 20px;
+      background-color: white;
+      border-radius: 0 0 5px 5px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .view.active {
+      display: block;
+    }
+    #map, #results-map {
+      height: 500px;
+      width: 100%;
+      margin-top: 20px;
+    }
+    .filter-section {
+      margin-bottom: 20px;
+      padding: 15px;
+      background-color: #ecf0f1;
+      border-radius: 5px;
+    }
+    select {
+      padding: 8px;
+      margin-left: 10px;
+      border-radius: 4px;
+      border: 1px solid #bdc3c7;
+    }
+    .wizard-step {
+      display: none;
+    }
+    .wizard-step.active {
+      display: block;
+    }
+    .btn {
+      padding: 10px 15px;
+      background-color: #3498db;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 10px 5px;
+    }
+    .btn-secondary {
+      background-color: #7f8c8d;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      padding: 12px;
+      text-align: right;
+      border-bottom: 1px solid #ddd;
+    }
+    th {
+      background-color: #3498db;
+      color: white;
+    }
+    .rating .stars {
+      color: #f39c12;
+    }
+    #datacenter-popover {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 20px;
+      border-radius: 5px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.2);
+      z-index: 1000;
+      max-width: 500px;
+      width: 90%;
+    }
+    #datacenter-popover.active {
+      display: block;
+    }
+    .detail-row {
+      display: flex;
+      margin-bottom: 10px;
+    }
+    .detail-label {
+      font-weight: bold;
+      width: 100px;
+    }
+    .service-tag {
+      display: inline-block;
+      background: #3498db;
+      color: white;
+      padding: 3px 8px;
+      border-radius: 3px;
+      margin-left: 5px;
+    }
+    .provider-link {
+      color: #3498db;
+      text-decoration: none;
+    }
+    .provider-link:hover {
+      text-decoration: underline;
+    }
+    .popup-content {
+      max-width: 300px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>מפת מרכזי נתונים בענן</h1>
+  </div>
+
+  <div class="container">
+    <ul class="nav-tabs">
+      <li class="nav-tab active" data-tab="map-view">מפת מרכזי נתונים</li>
+      <li class="nav-tab" data-tab="cloud-match">התאמת ענן</li>
+    </ul>
+
+    <div id="map-view" class="view active">
+      <div class="filter-section">
+        <label for="combined-filter">סנן לפי ספק/שירות:</label>
+        <select id="combined-filter" multiple>
+          <optgroup label="ספקים">
+            <option value="provider:aws">AWS</option>
+            <option value="provider:gcp">Google Cloud</option>
+            <option value="provider:azure">Microsoft Azure</option>
+            <option value="provider:ibm">IBM Cloud</option>
+            <option value="provider:oracle">Oracle Cloud</option>
+          </optgroup>
+          <optgroup label="שירותים">
+            <option value="service:EC2">EC2</option>
+            <option value="service:S3">S3</option>
+            <option value="service:RDS">RDS</option>
+            <option value="service:Compute Engine">Compute Engine</option>
+            <option value="service:Cloud Storage">Cloud Storage</option>
+            <option value="service:Virtual Machines">Virtual Machines</option>
+            <option value="service:Blob Storage">Blob Storage</option>
+            <option value="service:Cloud Functions">Cloud Functions</option>
+          </optgroup>
+        </select>
+
+        <label for="year-filter">שנה:</label>
+        <select id="year-filter">
+          <option value="all">כל השנים</option>
+          <option value="2010">2010</option>
+          <option value="2014">2014</option>
+          <option value="2016">2016</option>
+          <option value="2018">2018</option>
+          <option value="2020">2020</option>
+        </select>
+
+        <label for="region-filter">אזור:</label>
+        <select id="region-filter">
+          <option value="all">כל האזורים</option>
+          <option value="europe">אירופה</option>
+          <option value="asia">אסיה</option>
+          <option value="north-america">צפון אמריקה</option>
+          <option value="south-america">דרום אמריקה</option>
+          <option value="middle-east">המזרח התיכון</option>
+        </select>
+      </div>
+
+      <div id="map"></div>
+    </div>
+
+    <div id="cloud-match" class="view">
+      <div class="wizard-step active" id="wizard-step1">
+        <h2>שלב 1: מיקום</h2>
+        <p>באיזה אזור גיאוגרפי אתם זקוקים לשירותי הענן?</p>
+        <select id="customer-location">
+          <option value="global">כלל עולמי</option>
+          <option value="europe">אירופה</option>
+          <option value="asia">אסיה</option>
+          <option value="north-america">צפון אמריקה</option>
+          <option value="south-america">דרום אמריקה</option>
+          <option value="middle-east">המזרח התיכון</option>
+        </select>
+        <button class="btn" onclick="nextWizardStep(2)">הבא</button>
+      </div>
+
+      <div class="wizard-step" id="wizard-step2">
+        <h2>שלב 2: שירותים נדרשים</h2>
+        <p>אילו שירותי ענן אתם צריכים?</p>
+        <select id="needed-services" multiple>
+          <option value="EC2">EC2</option>
+          <option value="S3">S3</option>
+          <option value="RDS">RDS</option>
+          <option value="Compute Engine">Compute Engine</option>
+          <option value="Cloud Storage">Cloud Storage</option>
+          <option value="Virtual Machines">Virtual Machines</option>
+          <option value="Blob Storage">Blob Storage</option>
+          <option value="Cloud Functions">Cloud Functions</option>
+        </select>
+        <button class="btn" onclick="prevWizardStep(1)">חזור</button>
+        <button class="btn" onclick="nextWizardStep(3)">הבא</button>
+      </div>
+
+      <div class="wizard-step" id="wizard-step3">
+        <h2>שלב 3: תקציב ודרישות</h2>
+        <p>מה התקציב שלכם?</p>
+        <select id="budget">
+          <option value="low">נמוך</option>
+          <option value="medium">בינוני</option>
+          <option value="high">גבוה</option>
+        </select>
+        <p>האם יש דרישות תאימות מיוחדות?</p>
+        <select id="compliance">
+          <option value="none">אין</option>
+          <option value="hipaa">HIPAA</option>
+          <option value="gdpr">GDPR</option>
+        </select>
+        <button class="btn" onclick="prevWizardStep(2)">חזור</button>
+        <button class="btn" onclick="showResults()">הצג תוצאות</button>
+      </div>
+
+      <div id="match-results">
+        <h2>תוצאות ההתאמה</h2>
+        <button class="btn" onclick="resetWizard()">התחל מחדש</button>
+        <div id="results-map"></div>
+        <table>
+          <thead>
+            <tr>
+              <th>ספק</th>
+              <th>מיקום</th>
+              <th>שירותים</th>
+              <th>מחיר</th>
+              <th>דירוג</th>
+              <th>פעולות</th>
+            </tr>
+          </thead>
+          <tbody id="results-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="datacenter-popover">
+    <h3 id="popover-title"></h3>
+    <div id="datacenter-details"></div>
+    <button class="btn" onclick="closePopover()">סגור</button>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+  <script>
+    let map, resultsMap;
+    let markers = [];
+    let allDatacenters = [];
+
+    document.addEventListener('DOMContentLoaded', () => {
+      initMap();
+      document.querySelectorAll('.nav-tab').forEach(tab => {
+        tab.addEventListener('click', function () {
+          document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+          this.classList.add('active');
+          document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
+          document.getElementById(this.getAttribute('data-tab')).classList.add('active');
+          if (this.getAttribute('data-tab') === 'map-view' && map) map.invalidateSize();
+          if (this.getAttribute('data-tab') === 'cloud-match' && resultsMap) resultsMap.invalidateSize();
+        });
+      });
+
+      document.getElementById('combined-filter').addEventListener('change', filterDatacenters);
+      document.getElementById('year-filter').addEventListener('change', filterDatacenters);
+      document.getElementById('region-filter').addEventListener('change', filterDatacenters);
+
+      fetchDatacenters();
+    });
+
+    function initMap() {
+      map = L.map('map').setView([20, 0], 2);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+    }
+
+    function fetchDatacenters() {
+      allDatacenters = [
+        {
+          id: 1,
+          provider: "aws",
+          providerName: "AWS",
+          location: "פרנקפורט, גרמניה",
+          region: "europe",
+          year: 2014,
+          services: ["EC2", "S3", "RDS", "Lambda", "CloudFront"],
+          lat: 50.1109,
+          lon: 8.6821,
+          price: 2,
+          rating: 4.5,
+          website: "https://aws.amazon.com",
+          capacity: "100MW",
+          security: "ISO 27001, SOC 2",
+          uptime: "99.99%",
+          sustainability: "100% renewable energy",
+          certifications: ["HIPAA", "GDPR"]
+        },
+        {
+          id: 2,
+          provider: "gcp",
+          providerName: "Google Cloud",
+          location: "סינגפור",
+          region: "asia",
+          year: 2010,
+          services: ["Compute Engine", "Cloud Storage", "Cloud Functions", "BigQuery"],
+          lat: 1.3521,
+          lon: 103.8198,
+          price: 3,
+          rating: 4.2,
+          website: "https://cloud.google.com",
+          capacity: "80MW",
+          security: "ISO 27001, SOC 3",
+          uptime: "99.95%",
+          sustainability: "Carbon neutral",
+          certifications: ["GDPR"]
+        },
+        {
+          id: 3,
+          provider: "azure",
+          providerName: "Microsoft Azure",
+          location: "וירג'יניה, ארה\"ב",
+          region: "north-america",
+          year: 2016,
+          services: ["Virtual Machines", "Blob Storage", "Azure Functions", "Cosmos DB"],
+          lat: 37.4316,
+          lon: -78.6569,
+          price: 3,
+          rating: 4.3,
+          website: "https://azure.microsoft.com",
+          capacity: "120MW",
+          security: "ISO 27001, SOC 1",
+          uptime: "99.9%",
+          sustainability: "50% renewable energy",
+          certifications: ["HIPAA", "GDPR"]
+        },
+        {
+          id: 4,
+          provider: "ibm",
+          providerName: "IBM Cloud",
+          location: "טוקיו, יפן",
+          region: "asia",
+          year: 2018,
+          services: ["Virtual Servers", "Cloud Object Storage", "Cloud Functions"],
+          lat: 35.6762,
+          lon: 139.6503,
+          price: 4,
+          rating: 3.9,
+          website: "https://www.ibm.com/cloud",
+          capacity: "60MW",
+          security: "ISO 27001, SOC 2",
+          uptime: "99.98%",
+          sustainability: "35% renewable energy",
+          certifications: ["HIPAA"]
+        },
+        {
+          id: 5,
+          provider: "oracle",
+          providerName: "Oracle Cloud",
+          location: "סאו פאולו, ברזיל",
+          region: "south-america",
+          year: 2020,
+          services: ["Compute", "Object Storage", "Autonomous Database"],
+          lat: -23.5505,
+          lon: -46.6333,
+          price: 2,
+          rating: 3.7,
+          website: "https://www.oracle.com/cloud",
+          capacity: "40MW",
+          security: "ISO 27001",
+          uptime: "99.9%",
+          sustainability: "20% renewable energy",
+          certifications: []
+        },
+        {
+          id: 6,
+          provider: "aws",
+          providerName: "AWS",
+          location: "אירלנד",
+          region: "europe",
+          year: 2010,
+          services: ["EC2", "S3", "RDS", "Elastic Beanstalk"],
+          lat: 53.1424,
+          lon: -7.6921,
+          price: 2,
+          rating: 4.6,
+          website: "https://aws.amazon.com",
+          capacity: "90MW",
+          security: "ISO 27001, SOC 2",
+          uptime: "99.99%",
+          sustainability: "100% renewable energy",
+          certifications: ["GDPR"]
+        },
+        {
+          id: 7,
+          provider: "gcp",
+          providerName: "Google Cloud",
+          location: "אורגון, ארה\"ב",
+          region: "north-america",
+          year: 2014,
+          services: ["Compute Engine", "Cloud Storage", "Kubernetes Engine"],
+          lat: 45.5231,
+          lon: -122.6765,
+          price: 3,
+          rating: 4.4,
+          website: "https://cloud.google.com",
+          capacity: "110MW",
+          security: "ISO 27001, SOC 3",
+          uptime: "99.95%",
+          sustainability: "Carbon neutral",
+          certifications: ["HIPAA", "GDPR"]
+        },
+        {
+          id: 8,
+          provider: "azure",
+          providerName: "Microsoft Azure",
+          location: "דובאי, איחוד האמירויות",
+          region: "middle-east",
+          year: 2018,
+          services: ["Virtual Machines", "Blob Storage", "SQL Database"],
+          lat: 25.2048,
+          lon: 55.2708,
+          price: 4,
+          rating: 4.1,
+          website: "https://azure.microsoft.com",
+          capacity: "50MW",
+          security: "ISO 27001, SOC 1",
+          uptime: "99.9%",
+          sustainability: "30% renewable energy",
+          certifications: []
+        },
+        {
+          id: 9,
+          provider: "ibm",
+          providerName: "IBM Cloud",
+          location: "לונדון, אנגליה",
+          region: "europe",
+          year: 2016,
+          services: ["Virtual Servers", "Cloud Object Storage", "Watson"],
+          lat: 51.5074,
+          lon: -0.1278,
+          price: 3,
+          rating: 4.0,
+          website: "https://www.ibm.com/cloud",
+          capacity: "70MW",
+          security: "ISO 27001, SOC 2",
+          uptime: "99.98%",
+          sustainability: "40% renewable energy",
+          certifications: ["GDPR"]
+        },
+        {
+          id: 10,
+          provider: "oracle",
+          providerName: "Oracle Cloud",
+          location: "סידני, אוסטרליה",
+          region: "asia",
+          year: 2020,
+          services: ["Compute", "Object Storage", "MySQL"],
+          lat: -33.8688,
+          lon: 151.2093,
+          price: 3,
+          rating: 3.8,
+          website: "https://www.oracle.com/cloud",
+          capacity: "45MW",
+          security: "ISO 27001",
+          uptime: "99.9%",
+          sustainability: "25% renewable energy",
+          certifications: []
+        },
+        {
+          id: 11,
+          provider: "aws",
+          providerName: "AWS",
+          location: "אוהיו, ארה\"ב",
+          region: "north-america",
+          year: 2016,
+          services: ["EC2", "S3", "RDS", "Elasticache"],
+          lat: 40.4173,
+          lon: -82.9071,
+          price: 2,
+          rating: 4.4,
+          website: "https://aws.amazon.com",
+          capacity: "95MW",
+          security: "ISO 27001, SOC 2",
+          uptime: "99.99%",
+          sustainability: "100% renewable energy",
+          certifications: ["HIPAA"]
+        },
+        {
+          id: 12,
+          provider: "gcp",
+          providerName: "Google Cloud",
+          location: "טאיפיי, טייוואן",
+          region: "asia",
+          year: 2018,
+          services: ["Compute Engine", "Cloud Storage", "Cloud SQL"],
+          lat: 25.0330,
+          lon: 121.5654,
+          price: 3,
+          rating: 4.1,
+          website: "https://cloud.google.com",
+          capacity: "65MW",
+          security: "ISO 27001, SOC 3",
+          uptime: "99.95%",
+          sustainability: "Carbon neutral",
+          certifications: []
+        },
+        {
+          id: 13,
+          provider: "azure",
+          providerName: "Microsoft Azure",
+          location: "פריז, צרפת",
+          region: "europe",
+          year: 2014,
+          services: ["Virtual Machines", "Blob Storage", "Cosmos DB"],
+          lat: 48.8566,
+          lon: 2.3522,
+          price: 3,
+          rating: 4.2,
+          website: "https://azure.microsoft.com",
+          capacity: "85MW",
+          security: "ISO 27001, SOC 1",
+          uptime: "99.9%",
+          sustainability: "60% renewable energy",
+          certifications: ["GDPR"]
+        },
+        {
+          id: 14,
+          provider: "ibm",
+          providerName: "IBM Cloud",
+          location: "טורונטו, קנדה",
+          region: "north-america",
+          year: 2018,
+          services: ["Virtual Servers", "Cloud Object Storage", "Blockchain"],
+          lat: 43.6532,
+          lon: -79.3832,
+          price: 4,
+          rating: 3.9,
+          website: "https://www.ibm.com/cloud",
+          capacity: "55MW",
+          security: "ISO 27001, SOC 2",
+          uptime: "99.98%",
+          sustainability: "50% renewable energy",
+          certifications: ["HIPAA"]
+        },
+        {
+          id: 15,
+          provider: "oracle",
+          providerName: "Oracle Cloud",
+          location: "מומבאי, הודו",
+          region: "asia",
+          year: 2020,
+          services: ["Compute", "Object Storage", "NoSQL"],
+          lat: 19.0760,
+          lon: 72.8777,
+          price: 2,
+          rating: 3.6,
+          website: "https://www.oracle.com/cloud",
+          capacity: "35MW",
+          security: "ISO 27001",
+          uptime: "99.9%",
+          sustainability: "15% renewable energy",
+          certifications: []
+        },
+        {
+          id: 16,
+          provider: "aws",
+          providerName: "AWS",
+          location: "סיאול, קוריאה הדרומית",
+          region: "asia",
+          year: 2016,
+          services: ["EC2", "S3", "RDS", "Redshift"],
+          lat: 37.5665,
+          lon: 126.9780,
+          price: 3,
+          rating: 4.3,
+          website: "https://aws.amazon.com",
+          capacity: "75MW",
+          security: "ISO 27001, SOC 2",
+          uptime: "99.99%",
+          sustainability: "100% renewable energy",
+          certifications: []
+        },
+        {
+          id: 17,
+          provider: "gcp",
+          providerName: "Google Cloud",
+          location: "סאו פאולו, ברזיל",
+          region: "south-america",
+          year: 2018,
+          services: ["Compute Engine", "Cloud Storage", "Bigtable"],
+          lat: -23.5505,
+          lon: -46.6333,
+          price: 4,
+          rating: 4.0,
+          website: "https://cloud.google.com",
+          capacity: "50MW",
+          security: "ISO 27001, SOC 3",
+          uptime: "99.95%",
+          sustainability: "Carbon neutral",
+          certifications: []
+        },
+        {
+          id: 18,
+          provider: "azure",
+          providerName: "Microsoft Azure",
+          location: "יוהנסבורג, דרום אפריקה",
+          region: "africa",
+          year: 2020,
+          services: ["Virtual Machines", "Blob Storage", "SQL Database"],
+          lat: -26.2041,
+          lon: 28.0473,
+          price: 5,
+          rating: 3.9,
+          website: "https://azure.microsoft.com",
+          capacity: "30MW",
+          security: "ISO 27001, SOC 1",
+          uptime: "99.9%",
+          sustainability: "20% renewable energy",
+          certifications: []
+        },
+        {
+          id: 19,
+          provider: "ibm",
+          providerName: "IBM Cloud",
+          location: "דאלאס, ארה\"ב",
+          region: "north-america",
+          year: 2016,
+          services: ["Virtual Servers", "Cloud Object Storage", "AI Services"],
+          lat: 32.7767,
+          lon: -96.7970,
+          price: 3,
+          rating: 4.0,
+          website: "https://www.ibm.com/cloud",
+          capacity: "80MW",
+          security: "ISO 27001, SOC 2",
+          uptime: "99.98%",
+          sustainability: "45% renewable energy",
+          certifications: ["HIPAA"]
+        },
+        {
+          id: 20,
+          provider: "oracle",
+          providerName: "Oracle Cloud",
+          location: "מדריד, ספרד",
+          region: "europe",
+          year: 2020,
+          services: ["Compute", "Object Storage", "Autonomous Database"],
+          lat: 40.4168,
+          lon: -3.7038,
+          price: 3,
+          rating: 3.8,
+          website: "https://www.oracle.com/cloud",
+          capacity: "40MW",
+          security: "ISO 27001",
+          uptime: "99.9%",
+          sustainability: "30% renewable energy",
+          certifications: ["GDPR"]
+        }
+      ];
+      renderDatacenters();
+    }
+
+    function renderDatacenters(filtered = allDatacenters) {
+      markers.forEach(m => map.removeLayer(m));
+      markers = [];
+
+      filtered.forEach(dc => {
+        const marker = L.marker([dc.lat, dc.lon]).addTo(map);
+        const popupContent = `
+          <div class="popup-content">
+            <h4>${dc.providerName} - ${dc.location}</h4>
+            <p><strong>אזור:</strong> ${getRegionName(dc.region)}</p>
+            <p><strong>שירותים:</strong> ${dc.services.join(", ")}</p>
+            <p><strong>שנת הקמה:</strong> ${dc.year}</p>
+            <p><strong>מחיר:</strong> ${getPriceLevel(dc.price)}</p>
+            <p><strong>דירוג:</strong> ${dc.rating} ★</p>
+            <p><strong>קישור:</strong> <a href="${dc.website}" target="_blank" class="provider-link">אתר הספק</a></p>
+            <p><strong>קיבולת:</strong> ${dc.capacity}</p>
+            <p><strong>אבטחה:</strong> ${dc.security}</p>
+            <p><strong>זמינות:</strong> ${dc.uptime}</p>
+            <p><strong>קיימות:</strong> ${dc.sustainability}</p>
+          </div>
+        `;
+        marker.bindPopup(popupContent);
+        markers.push(marker);
+      });
+    }
+
+    function getRegionName(region) {
+      const regions = {
+        "europe": "אירופה",
+        "asia": "אסיה",
+        "north-america": "צפון אמריקה",
+        "south-america": "דרום אמריקה",
+        "middle-east": "המזרח התיכון",
+        "africa": "אפריקה"
+      };
+      return regions[region] || region;
+    }
+
+    function getPriceLevel(price) {
+      if (price <= 2) return 'נמוך';
+      if (price <= 3) return 'בינוני';
+      return 'גבוה';
+    }
+
+    function filterDatacenters() {
+      const selected = Array.from(document.getElementById('combined-filter').selectedOptions).map(opt => opt.value);
+      const selectedYear = document.getElementById('year-filter').value;
+      const selectedRegion = document.getElementById('region-filter').value;
+
+      const filtered = allDatacenters.filter(dc => {
+        const providerMatch = selected.length === 0 || selected.some(sel => sel === `provider:${dc.provider}`);
+        const serviceMatch = selected.length === 0 || dc.services.some(s => selected.includes(`service:${s}`));
+        const yearMatch = selectedYear === "all" || dc.year == selectedYear;
+        const regionMatch = selectedRegion === "all" || dc.region === selectedRegion;
+        return providerMatch && serviceMatch && yearMatch && regionMatch;
+      });
+
+      renderDatacenters(filtered);
+    }
+
+    function nextWizardStep(step) {
+      document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
+      document.getElementById(`wizard-step${step}`).classList.add('active');
+    }
+
+    function prevWizardStep(step) {
+      nextWizardStep(step);
+    }
+
+    function showResults() {
+      const location = document.getElementById('customer-location').value;
+      const services = Array.from(document.getElementById('needed-services').selectedOptions).map(o => o.value);
+      const budget = document.getElementById('budget').value;
+      const compliance = document.getElementById('compliance').value;
+
+      const matched = allDatacenters.filter(dc => {
+        const locationMatch = location === "global" || dc.region === location;
+        const serviceMatch = services.every(s => dc.services.includes(s));
+        const budgetMatch = (budget === "low" && dc.price <= 2) || (budget === "medium" && dc.price <= 3) || budget === "high";
+        const complianceMatch = compliance === "none" || dc.certifications.includes(compliance.toUpperCase());
+        return locationMatch && serviceMatch && budgetMatch && complianceMatch;
+      });
+
+      document.getElementById('match-results').classList.add('active');
+      renderResults(matched);
+    }
+
+    function renderResults(datacenters) {
+      const body = document.getElementById('results-body');
+      body.innerHTML = '';
+
+      if (!resultsMap) {
+        resultsMap = L.map('results-map').setView([20, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(resultsMap);
+      } else {
+        resultsMap.eachLayer(l => l instanceof L.Marker && resultsMap.removeLayer(l));
+      }
+
+      datacenters.forEach(dc => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td><a href="${dc.website}" target="_blank" class="provider-link">${dc.providerName}</a></td>
+          <td>${dc.location}</td>
+          <td>${dc.services.join(", ")}</td>
+          <td>${getPriceLevel(dc.price)}</td>
+          <td><div class="rating"><span class="stars">${'★'.repeat(Math.round(dc.rating))}</span> ${dc.rating}</div></td>
+          <td><button class="btn btn-secondary" onclick="showPopover(${dc.id})">פרטים</button></td>
+        `;
+        body.appendChild(row);
+
+        const marker = L.marker([dc.lat, dc.lon]).addTo(resultsMap);
+        const popupContent = `
+          <div class="popup-content">
+            <h4>${dc.providerName} - ${dc.location}</h4>
+            <p><strong>אזור:</strong> ${getRegionName(dc.region)}</p>
+            <p><strong>שירותים:</strong> ${dc.services.join(", ")}</p>
+            <p><strong>שנת הקמה:</strong> ${dc.year}</p>
+            <p><strong>מחיר:</strong> ${getPriceLevel(dc.price)}</p>
+            <p><strong>דירוג:</strong> ${dc.rating} ★</p>
+            <p><strong>קישור:</strong> <a href="${dc.website}" target="_blank" class="provider-link">אתר הספק</a></p>
+          </div>
+        `;
+        marker.bindPopup(popupContent);
+      });
+    }
+
+    function resetWizard() {
+      document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
+      document.getElementById('wizard-step1').classList.add('active');
+      document.getElementById('match-results').classList.remove('active');
+    }
+
+    function showPopover(id) {
+      const dc = allDatacenters.find(d => d.id === id);
+      if (!dc) return;
+      document.getElementById('popover-title').textContent = `פרטים על ${dc.providerName} - ${dc.location}`;
+      document.getElementById('datacenter-details').innerHTML = `
+        <div class="detail-row"><div class="detail-label">ספק:</div><div class="detail-value"><a href="${dc.website}" target="_blank" class="provider-link">${dc.providerName}</a></div></div>
+        <div class="detail-row"><div class="detail-label">מיקום:</div><div class="detail-value">${dc.location}</div></div>
+        <div class="detail-row"><div class="detail-label">אזור:</div><div class="detail-value">${getRegionName(dc.region)}</div></div>
+        <div class="detail-row"><div class="detail-label">שירותים:</div><div class="detail-value">${dc.services.map(s => `<span class='service-tag'>${s}</span>`).join('')}</div></div>
+        <div class="detail-row"><div class="detail-label">שנה:</div><div class="detail-value">${dc.year}</div></div>
+        <div class="detail-row"><div class="detail-label">מחיר:</div><div class="detail-value">${getPriceLevel(dc.price)}</div></div>
+        <div class="detail-row"><div class="detail-label">דירוג:</div><div class="detail-value">${dc.rating} ★</div></div>
+        <div class="detail-row"><div class="detail-label">קיבולת:</div><div class="detail-value">${dc.capacity}</div></div>
+        <div class="detail-row"><div class="detail-label">אבטחה:</div><div class="detail-value">${dc.security}</div></div>
+        <div class="detail-row"><div class="detail-label">זמינות:</div><div class="detail-value">${dc.uptime}</div></div>
+        <div class="detail-row"><div class="detail-label">קיימות:</div><div class="detail-value">${dc.sustainability}</div></div>
+        <div class="detail-row"><div class="detail-label">תאימות:</div><div class="detail-value">${dc.certifications.join(", ") || "אין"}</div></div>
+      `;
+      document.getElementById('datacenter-popover').classList.add('active');
+    }
+
+    function closePopover() {
+      document.getElementById('datacenter-popover').classList.remove('active');
+    }
+  </script>
+</body>
+</html>
